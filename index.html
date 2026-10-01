@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#050812">
+<title>Mini Pacman AMIA</title>
+<style>
+  :root{
+    --bg:#050812;
+    --blue:#134bff;
+    --yellow:#ffd92f;
+    --white:#fff;
+    --panel:#0c1224;
+  }
+  *{box-sizing:border-box}
+  html,body{
+    margin:0;
+    min-height:100%;
+    background:var(--bg);
+    color:#fff;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    overscroll-behavior:none;
+  }
+  body{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:10px 10px calc(10px + env(safe-area-inset-bottom));
+  }
+  #wrap{
+    width:min(100%,1100px);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  #hud{
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    gap:8px;
+    align-items:center;
+    font-weight:800;
+    font-size:clamp(13px,2.2vw,20px);
+    min-height:34px;
+  }
+  #playerName{color:var(--yellow)}
+  #timer{font-size:clamp(22px,4.5vw,38px);letter-spacing:1px;text-align:center}
+  #record{text-align:right;color:var(--yellow);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #gameBox{
+    position:relative;
+    width:100%;
+    aspect-ratio:1000/720;
+    background:#000;
+    border:2px solid #1a2140;
+    border-radius:14px;
+    overflow:hidden;
+    touch-action:none;
+  }
+  canvas{
+    width:100%;
+    height:100%;
+    display:block;
+    background:#000;
+  }
+  .overlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:18px;
+    background:rgba(0,0,0,.82);
+    z-index:5;
+  }
+  .panel{
+    width:min(92%,560px);
+    background:rgba(12,18,36,.96);
+    border:2px solid #27315d;
+    border-radius:22px;
+    padding:24px;
+    text-align:center;
+  }
+  h1{
+    margin:0 0 14px;
+    font-size:clamp(28px,6vw,50px);
+    color:var(--yellow);
+  }
+  input{
+    width:100%;
+    font-size:20px;
+    padding:13px 15px;
+    border-radius:12px;
+    border:2px solid #394477;
+    background:#080d1c;
+    color:#fff;
+    outline:none;
+  }
+  button{
+    border:0;
+    border-radius:14px;
+    padding:13px 18px;
+    font-size:18px;
+    font-weight:800;
+    background:var(--yellow);
+    color:#111;
+    cursor:pointer;
+    min-height:48px;
+  }
+  .primary{width:100%;margin-top:12px}
+  .hidden{display:none!important}
+  #resultTitle{font-size:clamp(25px,6vw,48px);color:var(--yellow);font-weight:900;margin-bottom:8px}
+  #resultTime{font-size:clamp(22px,4vw,34px);font-weight:800;margin:8px 0}
+  #recordBeat{font-size:clamp(22px,5vw,40px);font-weight:900;color:var(--yellow);margin-top:15px}
+  #trophy{width:150px;height:165px;margin:10px auto 0;display:block}
+  #trophyName{font-size:28px;font-weight:900;color:#dfe3e8}
+  #trophyTime{font-size:22px;font-weight:800;margin-bottom:10px}
+  #controls{
+    display:grid;
+    grid-template-columns:repeat(3,68px);
+    grid-template-rows:repeat(2,58px);
+    justify-content:center;
+    gap:8px;
+    margin-top:4px;
+    user-select:none;
+  }
+  .ctrl{
+    background:#182246;
+    color:#fff;
+    border:1px solid #33457c;
+    border-radius:16px;
+    font-size:28px;
+    font-weight:900;
+    padding:0;
+    min-height:58px;
+    touch-action:none;
+  }
+  .ctrl:active{transform:scale(.96);background:#24315e}
+  #up{grid-column:2;grid-row:1}
+  #left{grid-column:1;grid-row:2}
+  #down{grid-column:2;grid-row:2}
+  #right{grid-column:3;grid-row:2}
+  #hint{
+    text-align:center;
+    color:#aab3d0;
+    font-size:12px;
+    margin-top:1px;
+  }
+  @media (min-width:900px){
+    #controls{grid-template-columns:repeat(3,58px);grid-template-rows:repeat(2,48px)}
+    .ctrl{min-height:48px;font-size:24px}
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div id="playerName">JOUEUR</div>
+    <div id="timer">00:00.00</div>
+    <div id="record">RECORD : AUCUN</div>
+  </div>
+
+  <div id="gameBox">
+    <canvas id="game" width="1000" height="720"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <div class="panel">
+        <h1>MINI PACMAN AMIA</h1>
+        <p>Entre ton nom puis mange toutes les gommes sans te faire attraper par les 4 fantômes.</p>
+        <input id="nameInput" maxlength="18" autocomplete="name" placeholder="Ton nom">
+        <button id="startBtn" class="primary">JOUER</button>
+      </div>
+    </div>
+
+    <div id="endOverlay" class="overlay hidden">
+      <div class="panel">
+        <div id="resultTitle"></div>
+        <div id="resultTime"></div>
+        <div id="recordBeat" class="hidden">TU AS BATTU LE RECORD !</div>
+
+        <div id="trophyWrap" class="hidden">
+          <svg id="trophy" viewBox="0 0 160 175" aria-label="Coupe en argent" role="img">
+            <defs>
+              <linearGradient id="silver" x1="0" x2="1">
+                <stop offset="0" stop-color="#8f969e"/>
+                <stop offset=".25" stop-color="#f7f9fb"/>
+                <stop offset=".5" stop-color="#bfc6cd"/>
+                <stop offset=".75" stop-color="#ffffff"/>
+                <stop offset="1" stop-color="#8b9299"/>
+              </linearGradient>
+            </defs>
+            <path d="M48 18h64c0 39-10 62-32 70C58 80 48 57 48 18z" fill="url(#silver)" stroke="#737b84" stroke-width="3"/>
+            <path d="M49 30H25c0 28 12 44 32 45" fill="none" stroke="url(#silver)" stroke-width="11" stroke-linecap="round"/>
+            <path d="M111 30h24c0 28-12 44-32 45" fill="none" stroke="url(#silver)" stroke-width="11" stroke-linecap="round"/>
+            <rect x="72" y="84" width="16" height="42" rx="5" fill="url(#silver)"/>
+            <rect x="52" y="121" width="56" height="14" rx="5" fill="url(#silver)"/>
+            <rect x="38" y="136" width="84" height="18" rx="5" fill="url(#silver)"/>
+          </svg>
+          <div id="trophyName"></div>
+          <div id="trophyTime"></div>
+        </div>
+
+        <button id="restartBtn" class="primary">REJOUER</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls" aria-label="Commandes tactiles">
+    <button class="ctrl" id="up" aria-label="Haut">▲</button>
+    <button class="ctrl" id="left" aria-label="Gauche">◀</button>
+    <button class="ctrl" id="down" aria-label="Bas">▼</button>
+    <button class="ctrl" id="right" aria-label="Droite">▶</button>
+  </div>
+  <div id="hint">Clavier : flèches · iPhone/iPad : boutons tactiles</div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 1000, H = 720;
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  const startOverlay = document.getElementById("startOverlay");
+  const endOverlay = document.getElementById("endOverlay");
+  const nameInput = document.getElementById("nameInput");
+  const startBtn = document.getElementById("startBtn");
+  const restartBtn = document.getElementById("restartBtn");
+
+  const playerNameEl = document.getElementById("playerName");
+  const timerEl = document.getElementById("timer");
+  const recordEl = document.getElementById("record");
+
+  const resultTitle = document.getElementById("resultTitle");
+  const resultTime = document.getElementById("resultTime");
+  const recordBeat = document.getElementById("recordBeat");
+  const trophyWrap = document.getElementById("trophyWrap");
+  const trophyName = document.getElementById("trophyName");
+  const trophyTime = document.getElementById("trophyTime");
+
+  const walls = [
+    {x:20,y:75,w:960,h:20},
+    {x:20,y:680,w:960,h:20},
+    {x:20,y:75,w:20,h:625},
+    {x:960,y:75,w:20,h:625},
+
+    {x:140,y:150,w:22,h:180},
+    {x:140,y:410,w:22,h:190},
+    {x:838,y:150,w:22,h:180},
+    {x:838,y:410,w:22,h:190},
+
+    {x:250,y:150,w:200,h:22},
+    {x:550,y:150,w:200,h:22},
+    {x:250,y:600,w:200,h:22},
+    {x:550,y:600,w:200,h:22},
+
+    {x:260,y:250,w:22,h:170},
+    {x:718,y:250,w:22,h:170},
+
+    {x:360,y:230,w:280,h:22},
+    {x:360,y:520,w:280,h:22},
+
+    {x:360,y:330,w:100,h:22},
+    {x:540,y:330,w:100,h:22},
+    {x:360,y:420,w:100,h:22},
+    {x:540,y:420,w:100,h:22}
+  ];
+
+  let player, ghosts, pellets, running = false, finished = false;
+  let playerName = "JOUEUR";
+  let startTime = 0;
+  let finalMs = 0;
+  let lastFrame = 0;
+
+  const keys = {left:false,right:false,up:false,down:false};
+
+  const recordKey = "amia_pacman_record_v1";
+
+  function loadRecord() {
+    try {
+      const r = JSON.parse(localStorage.getItem(recordKey) || "null");
+      if (r && typeof r.name === "string" && Number.isFinite(r.ms) && r.ms > 0) return r;
+    } catch (_) {}
+    return null;
+  }
+
+  function saveRecord(name, ms) {
+    try { localStorage.setItem(recordKey, JSON.stringify({name, ms})); } catch (_) {}
+  }
+
+  function formatTime(ms) {
+    ms = Math.max(0, Math.floor(ms));
+    const totalSec = Math.floor(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    const cs = Math.floor((ms % 1000) / 10);
+    return `${String(min).padStart(2,"0")}:${String(sec).padStart(2,"0")}.${String(cs).padStart(2,"0")}`;
+  }
+
+  function refreshRecordHud() {
+    const r = loadRecord();
+    recordEl.textContent = r ? `RECORD : ${r.name} - ${formatTime(r.ms)}` : "RECORD : AUCUN";
+  }
+
+  function circleHitsWall(x, y, r) {
+    const left = x-r, right=x+r, top=y-r, bottom=y+r;
+    for (const m of walls) {
+      if (right > m.x && left < m.x+m.w && bottom > m.y && top < m.y+m.h) return true;
+    }
+    return false;
+  }
+
+  function pelletPossible(x,y) {
+    return !circleHitsWall(x,y,19);
+  }
+
+  function createPellets() {
+    const p = [];
+    for (let y=115; y<=655; y+=30) {
+      for (let x=65; x<=935; x+=30) {
+        if (pelletPossible(x,y)) p.push({x,y,eaten:false});
+      }
+    }
+    return p;
+  }
+
+  function availableDirections(g) {
+    const dirs = [
+      {x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}
+    ];
+    return dirs.filter(d => !circleHitsWall(g.x+d.x*12, g.y+d.y*12, g.r));
+  }
+
+  function chooseGhostDirection(g, now) {
+    const dirs = availableDirections(g);
+    if (dirs.length) {
+      const d = dirs[Math.floor(Math.random()*dirs.length)];
+      g.dx=d.x; g.dy=d.y;
+    }
+    g.nextTurn = now + 450 + Math.random()*1100;
+  }
+
+  function createGhosts(now) {
+    const gs = [
+      {x:470,y:375,color:"#ff2a2a"},
+      {x:530,y:375,color:"#24d9ff"},
+      {x:500,y:390,color:"#ff67b6"},
+      {x:500,y:290,color:"#ff9d21"}
+    ].map(v => ({...v, dx:0,dy:0,r:15,nextTurn:0,speed:115}));
+    gs.forEach(g=>chooseGhostDirection(g, now));
+    return gs;
+  }
+
+  function resetGame() {
+    player = {x:80,y:650,r:16,speed:205};
+    pellets = createPellets();
+    const now = performance.now();
+    ghosts = createGhosts(now);
+    startTime = now;
+    finalMs = 0;
+    running = true;
+    finished = false;
+    lastFrame = now;
+    timerEl.textContent = "00:00.00";
+    playerNameEl.textContent = playerName;
+    refreshRecordHud();
+    endOverlay.classList.add("hidden");
+  }
+
+  function startGame() {
+    const n = nameInput.value.trim().slice(0,18);
+    playerName = n || "JOUEUR";
+    startOverlay.classList.add("hidden");
+    resetGame();
+  }
+
+  function dist2(a,b) {
+    const dx=a.x-b.x, dy=a.y-b.y;
+    return dx*dx+dy*dy;
+  }
+
+  function finish(win) {
+    if (!running) return;
+    running = false;
+    finished = true;
+    finalMs = performance.now() - startTime;
+
+    if (win) {
+      resultTitle.textContent = "BRAVO TU AS REUSSI !!";
+      resultTime.textContent = `TON TEMPS : ${formatTime(finalMs)}`;
+
+      const old = loadRecord();
+      const beaten = !old || finalMs < old.ms;
+
+      if (beaten) {
+        saveRecord(playerName, Math.round(finalMs));
+        recordBeat.classList.remove("hidden");
+        trophyWrap.classList.remove("hidden");
+        trophyName.textContent = playerName;
+        trophyTime.textContent = formatTime(finalMs);
+      } else {
+        recordBeat.classList.add("hidden");
+        trophyWrap.classList.add("hidden");
+      }
+    } else {
+      resultTitle.textContent = "UN FANTÔME T'A ATTRAPÉ !";
+      resultTime.textContent = `TEMPS : ${formatTime(finalMs)}`;
+      recordBeat.classList.add("hidden");
+      trophyWrap.classList.add("hidden");
+    }
+
+    timerEl.textContent = formatTime(finalMs);
+    refreshRecordHud();
+    endOverlay.classList.remove("hidden");
+  }
+
+  function update(dt, now) {
+    if (!running) return;
+
+    let nx = player.x, ny = player.y;
+    const step = player.speed * dt;
+
+    if (keys.left) nx -= step;
+    if (keys.right) nx += step;
+    if (!circleHitsWall(nx, player.y, player.r)) player.x = nx;
+
+    nx = player.x; ny = player.y;
+    if (keys.up) ny -= step;
+    if (keys.down) ny += step;
+    if (!circleHitsWall(player.x, ny, player.r)) player.y = ny;
+
+    let remaining = 0;
+    for (const p of pellets) {
+      if (p.eaten) continue;
+      const dx = player.x-p.x, dy=player.y-p.y;
+      if (dx*dx+dy*dy < 24*24) p.eaten = true;
+      else remaining++;
+    }
+
+    if (remaining === 0) {
+      finish(true);
+      return;
+    }
+
+    for (const g of ghosts) {
+      const stepG = g.speed * dt;
+      const fx = g.x + g.dx*stepG;
+      const fy = g.y + g.dy*stepG;
+
+      if (circleHitsWall(fx,fy,g.r)) {
+        chooseGhostDirection(g, now);
+      } else {
+        g.x=fx; g.y=fy;
+      }
+
+      if (now >= g.nextTurn) chooseGhostDirection(g, now);
+
+      const rr = player.r + g.r;
+      if (dist2(player,g) < rr*rr) {
+        finish(false);
+        return;
+      }
+    }
+
+    timerEl.textContent = formatTime(now-startTime);
+  }
+
+  function drawCircle(x,y,r,color) {
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=color;
+    ctx.fill();
+  }
+
+  function drawGhost(g) {
+    ctx.fillStyle=g.color;
+    ctx.beginPath();
+    ctx.arc(g.x,g.y-5,g.r,Math.PI,0);
+    ctx.lineTo(g.x+g.r,g.y+12);
+    ctx.lineTo(g.x+7,g.y+7);
+    ctx.lineTo(g.x,g.y+13);
+    ctx.lineTo(g.x-7,g.y+7);
+    ctx.lineTo(g.x-g.r,g.y+12);
+    ctx.closePath();
+    ctx.fill();
+
+    drawCircle(g.x-6,g.y-8,5,"white");
+    drawCircle(g.x+6,g.y-8,5,"white");
+    drawCircle(g.x-5,g.y-8,2,"#143d9a");
+    drawCircle(g.x+7,g.y-8,2,"#143d9a");
+  }
+
+  function drawPacman() {
+    const moving = keys.left||keys.right||keys.up||keys.down;
+    const mouth = moving ? (0.18 + Math.abs(Math.sin(performance.now()/85))*0.22) : 0.18;
+    let angle = 0;
+    if (keys.left) angle=Math.PI;
+    else if (keys.up) angle=-Math.PI/2;
+    else if (keys.down) angle=Math.PI/2;
+
+    ctx.fillStyle="#ffd92f";
+    ctx.beginPath();
+    ctx.moveTo(player.x,player.y);
+    ctx.arc(player.x,player.y,player.r,angle+mouth,angle+Math.PI*2-mouth);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function draw() {
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,W,H);
+
+    ctx.fillStyle="#134bff";
+    for (const m of walls) ctx.fillRect(m.x,m.y,m.w,m.h);
+
+    for (const p of pellets) if (!p.eaten) drawCircle(p.x,p.y,4,"#fff");
+
+    if (player) drawPacman();
+    if (ghosts) ghosts.forEach(drawGhost);
+  }
+
+  function loop(now) {
+    const dt = Math.min(0.03,(now-lastFrame)/1000 || 0);
+    lastFrame = now;
+    update(dt,now);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function setKey(key, value) {
+    if (key in keys) keys[key]=value;
+  }
+
+  addEventListener("keydown", e => {
+    if (e.key==="ArrowLeft"){setKey("left",true);e.preventDefault();}
+    if (e.key==="ArrowRight"){setKey("right",true);e.preventDefault();}
+    if (e.key==="ArrowUp"){setKey("up",true);e.preventDefault();}
+    if (e.key==="ArrowDown"){setKey("down",true);e.preventDefault();}
+  }, {passive:false});
+
+  addEventListener("keyup", e => {
+    if (e.key==="ArrowLeft") setKey("left",false);
+    if (e.key==="ArrowRight") setKey("right",false);
+    if (e.key==="ArrowUp") setKey("up",false);
+    if (e.key==="ArrowDown") setKey("down",false);
+  });
+
+  const buttonMap = {up:"up",down:"down",left:"left",right:"right"};
+  for (const [id,key] of Object.entries(buttonMap)) {
+    const b=document.getElementById(id);
+    const on = e => {e.preventDefault(); setKey(key,true);};
+    const off = e => {e.preventDefault(); setKey(key,false);};
+    b.addEventListener("pointerdown",on);
+    b.addEventListener("pointerup",off);
+    b.addEventListener("pointercancel",off);
+    b.addEventListener("pointerleave",off);
+  }
+
+  startBtn.addEventListener("click",startGame);
+  restartBtn.addEventListener("click",resetGame);
+  nameInput.addEventListener("keydown",e=>{ if(e.key==="Enter") startGame(); });
+
+  refreshRecordHud();
+  player={x:80,y:650,r:16,speed:205};
+  ghosts=[];
+  pellets=createPellets();
+  draw();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
